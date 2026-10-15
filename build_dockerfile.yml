@@ -1,0 +1,63 @@
+---
+- name: Build and Run Docker Container on Remote Nodes
+  hosts: all
+  become: yes
+  tasks:
+    - name: Update cache and install Docker & Python SDK (Ubuntu/Debian)
+      apt:
+        name:
+          - docker.io
+          - python3-docker
+        state: present
+        update_cache: yes
+        lock_timeout: 300
+      when: ansible_os_family == "Debian"
+
+    - name: Install Docker and Pip (CentOS/RHEL)
+      yum:
+        name:
+          - docker
+          - python3-pip
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Install Docker Python SDK via pip (CentOS/RHEL)
+      pip:
+        name: docker
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Ensure Docker service is started
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Create project directory
+      file:
+        path: /opt/containerization
+        state: directory
+        mode: '0755'
+
+    - name: Copy Dockerfile to remote host
+      copy:
+        src: ./Dockerfile
+        dest: /opt/containerization/Dockerfile
+        mode: '0644'
+
+    - name: Build Docker Image
+      community.docker.docker_image:
+        build:
+          path: /opt/containerization
+        name: web-db-app
+        tag: latest
+        source: build
+
+    - name: Ensure container is running
+      community.docker.docker_container:
+        name: web_db_container
+        image: web-db-app:latest
+        state: started
+        ports:
+          - "8080:80"
+          - "3306:3306"
